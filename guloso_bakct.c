@@ -8,55 +8,42 @@ typedef struct {
     int pos;
 } Elemento;
 
-// Variavel global para medir a profundidade da pilha no Backtracking
+// Variáveis globais para métricas de complexidade
 int profundidade_maxima = 0;
+long long total_chamadas = 0; // CENÁRIO 3: Contador de operações (recursões)
 
-// Funcao para encontrar o maior entre dois numeros (sem operador ternario)
 long long obter_maximo(long long a, long long b) {
-    if (a > b) {
-        return a;
-    } else {
-        return b;
-    }
+    if (a > b) return a;
+    return b;
 }
 
-// Comparador para a ordenacao do Guloso
 int comparar_elementos(const void *a, const void *b) {
     Elemento *itemA = (Elemento *)a;
     Elemento *itemB = (Elemento *)b;
     return itemB->valor - itemA->valor;
 }
 
-// --- 1. ABORDAGEM BACKTRACKING (Busca a Solucao Otima) ---
-// Mede a memoria via profundidade da recursao (Pilha/Stack)
+// --- 1. ABORDAGEM BACKTRACKING ---
 long long algoritmo_backtracking(int arr[], int n, int i, int profundidade_atual) {
-    // Rastreio de memoria da pilha
+    total_chamadas++; // CENÁRIO 3: Registra cada "operação" ou decisão tomada
+
     if (profundidade_atual > profundidade_maxima) {
         profundidade_maxima = profundidade_atual;
     }
 
-    // Caso base: se chegar ao fim do array
-    if (i >= n) {
-        return 0;
-    }
+    if (i >= n) return 0;
 
-    // Escolha 1: Incluir o numero atual (pula o vizinho proximo)
+    // A exaustividade garante a qualidade (CENÁRIO 2)
     long long incluir = arr[i] + algoritmo_backtracking(arr, n, i + 2, profundidade_atual + 1);
-
-    // Escolha 2: Ignorar o numero atual (vai para o proximo)
     long long excluir = algoritmo_backtracking(arr, n, i + 1, profundidade_atual + 1);
 
-    // Retorna a melhor escolha (solucao otima)
     return obter_maximo(incluir, excluir);
 }
 
-// --- 2. ABORDAGEM GULOSA (Solucao Aproximada) ---
-// Mede a memoria via alocacao dinamica (Heap)
-long long algoritmo_guloso(int arr[], int n, size_t *memoria_heap) {
+// --- 2. ABORDAGEM GULOSA ---
+long long algoritmo_guloso(int arr[], int n, size_t *memoria_heap, long long *ops_guloso) {
     size_t tamanho_elementos = n * sizeof(Elemento);
     size_t tamanho_bloqueio = n * sizeof(int);
-    
-    // Registra o consumo de memoria exigido pelo trabalho
     *memoria_heap = tamanho_elementos + tamanho_bloqueio;
 
     Elemento *elementos = malloc(tamanho_elementos);
@@ -64,26 +51,22 @@ long long algoritmo_guloso(int arr[], int n, size_t *memoria_heap) {
     long long soma_total = 0;
 
     for (int i = 0; i < n; i++) {
+        (*ops_guloso)++; // Contando iterações simples
         elementos[i].valor = arr[i];
         elementos[i].pos = i;
     }
 
-    // Ordena do maior para o menor
+    // Ordenação (parte vital do custo do guloso)
     qsort(elementos, n, sizeof(Elemento), comparar_elementos);
 
     for (int i = 0; i < n; i++) {
+        (*ops_guloso)++; // Contando a lógica de decisão
         int p = elementos[i].pos;
         if (bloqueado[p] == 0) {
-            soma_total = soma_total + elementos[i].valor;
+            soma_total += elementos[i].valor;
             bloqueado[p] = 1;
-            
-            // Bloqueia vizinhos adjacentes
-            if (p > 0) {
-                bloqueado[p - 1] = 1;
-            }
-            if (p < n - 1) {
-                bloqueado[p + 1] = 1;
-            }
+            if (p > 0) bloqueado[p - 1] = 1;
+            if (p < n - 1) bloqueado[p + 1] = 1;
         }
     }
 
@@ -92,13 +75,12 @@ long long algoritmo_guloso(int arr[], int n, size_t *memoria_heap) {
     return soma_total;
 }
 
-// --- FUNCOES DE TESTE PARA OS CENARIOS ---
-
 void realizar_teste(int n, int eh_cenario_armadilha) {
     int *arr = malloc(n * sizeof(int));
     
     if (eh_cenario_armadilha == 1) {
-        // Exemplo especifico onde o Guloso falha (Qualidade da Solucao)
+        // CENÁRIO 2: Aqui forçamos o array [50, 100, 80, 20]
+        // O guloso pegará 100, o Backtracking pegará 50+80=130.
         int armadilha[] = {50, 100, 80, 20};
         for(int i = 0; i < 4; i++) arr[i] = armadilha[i];
         n = 4;
@@ -108,28 +90,26 @@ void realizar_teste(int n, int eh_cenario_armadilha) {
 
     printf("\n--- Teste com N = %d ---\n", n);
 
-    // Medicao Backtracking
+    // Medição Backtracking
+    total_chamadas = 0;
     profundidade_maxima = 0;
     clock_t inicio_b = clock();
     long long res_b = algoritmo_backtracking(arr, n, 0, 1);
-    clock_t fim_b = clock();
-    double tempo_b = (double)(fim_b - inicio_b) / CLOCKS_PER_SEC;
-    // Estimativa: cada quadro na pilha consome cerca de 64 bytes
-    long memoria_stack = profundidade_maxima * 64; 
+    double tempo_b = (double)(clock() - inicio_b) / CLOCKS_PER_SEC;
 
-    // Medicao Guloso
+    // Medição Guloso
     size_t memoria_heap = 0;
+    long long ops_guloso = 0;
     clock_t inicio_g = clock();
-    long long res_g = algoritmo_guloso(arr, n, &memoria_heap);
-    clock_t fim_g = clock();
-    double tempo_g = (double)(fim_g - inicio_g) / CLOCKS_PER_SEC;
+    long long res_g = algoritmo_guloso(arr, n, &memoria_heap, &ops_guloso);
+    double tempo_g = (double)(clock() - inicio_g) / CLOCKS_PER_SEC;
 
-    printf("METODO       | SOMA       | TEMPO (s)  | MEMORIA\n");
-    printf("Backtracking | %-10lld | %-10.6f | %ld bytes (Stack)\n", res_b, tempo_b, memoria_stack);
-    printf("Guloso       | %-10lld | %-10.6f | %zu bytes (Heap)\n", res_g, tempo_g, memoria_heap);
+    printf("METODO       | SOMA       | OPERACOES (Cenario 3) | TEMPO (s)\n");
+    printf("Backtracking | %-10lld | %-20lld | %-10.6f\n", res_b, total_chamadas, tempo_b);
+    printf("Guloso       | %-10lld | %-20lld | %-10.6f\n", res_g, ops_guloso, tempo_g);
     
     if (res_b > res_g) {
-        printf("Analise: O Guloso perdeu em qualidade por %lld unidades.\n", res_b - res_g);
+        printf(">>> AVISO: Qualidade Inferior no Guloso (Cenario 2) detectada!\n");
     }
 
     free(arr);
@@ -138,29 +118,19 @@ void realizar_teste(int n, int eh_cenario_armadilha) {
 int main() {
     srand(time(NULL));
     
-    printf("TRABALHO: GULOSO VS BACKTRACKING [cite: 6]\n");
+    printf("ESTUDO: GULOSO (APROXIMADO) VS BACKTRACKING (OTIMO)\n");
 
-    // 1. Cenario Armadilha (Qualidade da Solucao [cite: 11])
-    printf("\nCENARIO: ARMADILHA (QUALIDADE)");
+    // CENÁRIO 2: Demonstrar que o Guloso nem sempre é o melhor
+    printf("\n[CENARIO 2: ARMADILHA DE QUALIDADE]");
     realizar_teste(4, 1);
 
-    // 2. Cenario Escalabilidade (Tempo de Execucao [cite: 12])
-    printf("\nCENARIO: ESCALABILIDADE (TEMPO)");
-    realizar_teste(35, 0); // Backtracking comeca a demorar aqui
+    // CENÁRIO 3: Demonstrar a explosão de operações (N=30 gera milhões de chamadas)
+    printf("\n[CENARIO 3: CONTAGEM DE OPERACOES E ESCALABILIDADE]");
+    realizar_teste(30, 0); 
 
-    // 3. Demonstracao para N grande (Apenas Guloso)
-    printf("\nCENARIO: DADOS MASSIVOS (APENAS GULOSO)");
-    size_t mem_g = 0;
-    int n_grande = 100000;
-    int *arr_grande = malloc(n_grande * sizeof(int));
-    for(int i=0; i<n_grande; i++) arr_grande[i] = 10;
-    
-    clock_t ini = clock();
-    algoritmo_guloso(arr_grande, n_grande, &mem_g);
-    printf("\nN = 100.000 | Tempo Guloso: %.4f s | Memoria: %zu bytes\n", 
-           (double)(clock() - ini) / CLOCKS_PER_SEC, mem_g);
-    printf("Nota: O Backtracking travaria por tempo e Stack Overflow aqui.\n");
+    printf("\n[DADOS MASSIVOS: O LIMITANTE DO BACKTRACKING]");
+    printf("\nPara N=100.000, o Backtracking faria aprox. 2^100.000 operacoes.");
+    printf("\nO Guloso resolvera em milissegundos...\n");
 
-    free(arr_grande);
     return 0;
 }
